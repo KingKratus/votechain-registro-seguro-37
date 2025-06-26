@@ -1,28 +1,5 @@
 
-interface TSEBoletim {
-  secao: number;
-  zona: number;
-  municipio: string;
-  estado: string;
-  timestamp: string;
-  hash: string;
-  votos: Record<string, number>;
-  dadosTSE: {
-    versaoQR: string;
-    dataEleicao: string;
-    turno: number;
-    codigoMunicipio: number;
-    totalEleitoresAptos: number;
-    totalComparecimento: number;
-    totalFaltas: number;
-    horaAbertura: string;
-    horaFechamento: string;
-    votosBrancos: number;
-    votosNulos: number;
-    totalVotosNominais: number;
-    assinatura: string;
-  };
-}
+import { TSEBoletim } from '@/types/tse';
 
 export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
   try {
@@ -49,12 +26,14 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
       if (match) {
         const numeroCandidato = match[1];
         const quantidadeVotos = parseInt(match[2]);
-        votos[`candidato_${numeroCandidato}`] = quantidadeVotos;
-        totalVotosNominais += quantidadeVotos;
+        if (!isNaN(quantidadeVotos) && quantidadeVotos >= 0) {
+          votos[`candidato_${numeroCandidato}`] = quantidadeVotos;
+          totalVotosNominais += quantidadeVotos;
+        }
       }
     });
     
-    // Dados principais extraídos
+    // Dados principais extraídos com validação
     const zona = parseInt(dadosParsed['ZONA'] || '0');
     const secao = parseInt(dadosParsed['SECA'] || '0');
     const codigoMunicipio = parseInt(dadosParsed['MUNI'] || '0');
@@ -66,16 +45,30 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
     const hash = dadosParsed['HASH'] || '';
     const assinatura = dadosParsed['ASSI'] || '';
     
+    // Validação básica dos dados obrigatórios
+    if (!zona || !secao || !hash) {
+      console.error('Dados obrigatórios ausentes:', { zona, secao, hash });
+      return null;
+    }
+    
     // Converter data do formato YYYYMMDD para ISO
     const dataEleicao = dadosParsed['DTPL'] || '';
     const dataFormatada = dataEleicao.length === 8 
       ? `${dataEleicao.substring(0,4)}-${dataEleicao.substring(4,6)}-${dataEleicao.substring(6,8)}`
       : new Date().toISOString().split('T')[0];
     
-    // Mapear código do município para nome (simplificado)
+    // Mapear código do município para nome (expandido)
     const getMunicipioNome = (codigo: number): string => {
       const municipios: Record<number, string> = {
         30848: 'Belo Horizonte',
+        71072: 'São Paulo',
+        60011: 'Rio de Janeiro',
+        20001: 'Brasília',
+        40001: 'Salvador',
+        80001: 'Curitiba',
+        90001: 'Porto Alegre',
+        50001: 'Recife',
+        23001: 'Fortaleza',
         // Adicionar mais mapeamentos conforme necessário
       };
       return municipios[codigo] || `Município ${codigo}`;
@@ -106,7 +99,7 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
       }
     };
     
-    console.log('Boletim processado:', boletim);
+    console.log('Boletim processado com sucesso:', boletim);
     return boletim;
     
   } catch (error) {
@@ -116,6 +109,21 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
 };
 
 export const validateTSEHash = (boletim: TSEBoletim): boolean => {
-  // Validação básica do hash para evitar duplicatas
-  return boletim.hash && boletim.hash.length > 10;
+  // Validação aprimorada do hash
+  if (!boletim.hash || boletim.hash.length < 10) return false;
+  
+  // Verificar se é um hash válido (apenas caracteres hexadecimais)
+  const hashPattern = /^[A-Fa-f0-9]+$/;
+  return hashPattern.test(boletim.hash);
+};
+
+// Função para validar integridade dos dados TSE
+export const validateTSEIntegrity = (boletim: TSEBoletim): boolean => {
+  if (!boletim.dadosTSE) return false;
+  
+  const { dadosTSE } = boletim;
+  
+  // Verificar se os totais batem
+  const totalVotos = dadosTSE.totalVotosNominais + dadosTSE.votosBrancos + dadosTSE.votosNulos;
+  return Math.abs(totalVotos - dadosTSE.totalComparecimento) <= 1; // Permitir diferença de 1 por arredondamento
 };

@@ -1,43 +1,29 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Header from '@/components/Header';
 import QRScanner from '@/components/QRScanner';
 import VoteDataCard from '@/components/VoteDataCard';
 import StatsOverview from '@/components/StatsOverview';
 import SecurityInfo from '@/components/SecurityInfo';
+import ValidationDetails from '@/components/ValidationDetails';
+import DataExport from '@/components/DataExport';
 import { useToast } from '@/hooks/use-toast';
-
-interface TSEBoletim {
-  secao: number;
-  zona: number;
-  municipio: string;
-  estado: string;
-  timestamp: string;
-  hash: string;
-  votos: Record<string, number>;
-  dadosTSE?: {
-    versaoQR: string;
-    dataEleicao: string;
-    turno: number;
-    codigoMunicipio: number;
-    totalEleitoresAptos: number;
-    totalComparecimento: number;
-    totalFaltas: number;
-    horaAbertura: string;
-    horaFechamento: string;
-    votosBrancos: number;
-    votosNulos: number;
-    totalVotosNominais: number;
-    assinatura: string;
-  };
-  status?: 'pending' | 'confirmed' | 'failed';
-}
+import { TSEBoletim } from '@/types/tse';
+import { dataManager } from '@/utils/dataManager';
+import { validateTSEBoletim } from '@/utils/tseValidator';
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
   const [voteRecords, setVoteRecords] = useState<TSEBoletim[]>([]);
+  const [lastValidation, setLastValidation] = useState<any>(null);
   const { toast } = useToast();
+
+  // Carregar dados do cache na inicialização
+  useEffect(() => {
+    const cachedRecords = dataManager.getAllBoletins();
+    setVoteRecords(cachedRecords);
+  }, []);
 
   const handleConnectWallet = () => {
     if (!walletConnected) {
@@ -55,38 +41,28 @@ const Index = () => {
   const handleScanResult = (data: TSEBoletim) => {
     console.log('Novo boletim recebido:', data);
     
-    // Verificar duplicatas por hash (principal) e também por seção/zona
-    const isDuplicateHash = voteRecords.some(record => record.hash === data.hash);
-    const isDuplicateSection = voteRecords.some(record => 
-      record.secao === data.secao && 
-      record.zona === data.zona &&
-      record.municipio === data.municipio
-    );
+    // Usar o gerenciador de dados para processar o boletim
+    const result = dataManager.addBoletim(data);
     
-    if (isDuplicateHash) {
+    if (result.success && result.data) {
+      // Atualizar a lista local
+      setVoteRecords(dataManager.getAllBoletins());
+      
+      // Armazenar resultado da validação para exibição
+      const validation = validateTSEBoletim(data);
+      setLastValidation(validation);
+      
       toast({
-        title: "Boletim Duplicado - Hash",
-        description: "Este boletim já foi registrado anteriormente (mesmo hash).",
+        title: "Boletim TSE Processado",
+        description: result.message,
+      });
+    } else {
+      toast({
+        title: "Erro no Processamento",
+        description: result.message,
         variant: "destructive",
       });
-      return;
     }
-    
-    if (isDuplicateSection) {
-      toast({
-        title: "Boletim Duplicado - Seção",
-        description: `Já existe um registro para Seção ${data.secao}, Zona ${data.zona} em ${data.municipio}.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setVoteRecords(prev => [data, ...prev]);
-    
-    toast({
-      title: "Boletim TSE Adicionado",
-      description: `Seção ${data.secao}, Zona ${data.zona} - ${data.municipio}`,
-    });
   };
 
   const handleRegisterVote = (data: TSEBoletim) => {
@@ -99,14 +75,19 @@ const Index = () => {
       return;
     }
 
+    // Verificar score de validação
+    if (data.validationScore && data.validationScore < 80) {
+      toast({
+        title: "Score de Validação Baixo",
+        description: `Score: ${data.validationScore}/100. Recomendado: mínimo 80 pontos.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Simular registro na blockchain
-    setVoteRecords(prev => 
-      prev.map(record => 
-        record.hash === data.hash 
-          ? { ...record, status: 'pending' as const }
-          : record
-      )
-    );
+    dataManager.updateBoletimStatus(data.hash, 'pending');
+    setVoteRecords(dataManager.getAllBoletins());
 
     toast({
       title: "Registrando na Blockchain",
@@ -115,13 +96,8 @@ const Index = () => {
 
     // Simular confirmação após alguns segundos
     setTimeout(() => {
-      setVoteRecords(prev => 
-        prev.map(record => 
-          record.hash === data.hash 
-            ? { ...record, status: 'confirmed' as const }
-            : record
-        )
-      );
+      dataManager.updateBoletimStatus(data.hash, 'confirmed');
+      setVoteRecords(dataManager.getAllBoletins());
 
       toast({
         title: "Smart Contract Criado",
@@ -130,13 +106,12 @@ const Index = () => {
     }, 3000);
   };
 
+  // Calcular estatísticas usando o gerenciador de dados
+  const stats = dataManager.getStats();
   const totalVotes = voteRecords.reduce((sum, record) => {
     return sum + (record.dadosTSE?.totalComparecimento || 
       Object.values(record.votos).reduce((s, v) => s + v, 0));
   }, 0);
-
-  const verifiedCount = voteRecords.filter(r => r.status === 'confirmed').length;
-  const pendingCount = voteRecords.filter(r => r.status === 'pending').length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
@@ -152,20 +127,30 @@ const Index = () => {
           </h2>
           <p className="text-lg text-gray-600 max-w-3xl">
             Processe boletins de urna oficiais do TSE e registre-os de forma segura na blockchain. 
-            Sistema com proteção anti-duplicação e validação de integridade.
+            Sistema com validação rigorosa, proteção anti-duplicação e auditoria completa.
           </p>
         </div>
 
         <Tabs defaultValue="scanner" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:w-2/3">
+          <TabsList className="grid w-full grid-cols-5 lg:w-3/4">
             <TabsTrigger value="scanner">Scanner TSE</TabsTrigger>
             <TabsTrigger value="records">Registros</TabsTrigger>
             <TabsTrigger value="stats">Estatísticas</TabsTrigger>
+            <TabsTrigger value="export">Exportar</TabsTrigger>
             <TabsTrigger value="security">Segurança</TabsTrigger>
           </TabsList>
 
           <TabsContent value="scanner" className="space-y-6">
-            <QRScanner onScanResult={handleScanResult} />
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <QRScanner onScanResult={handleScanResult} />
+              </div>
+              <div>
+                {lastValidation && (
+                  <ValidationDetails validation={lastValidation} />
+                )}
+              </div>
+            </div>
             
             {voteRecords.length > 0 && (
               <div className="space-y-4">
@@ -173,7 +158,7 @@ const Index = () => {
                   Boletins Processados ({voteRecords.length})
                 </h3>
                 <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {voteRecords.slice(0, 6).map((record, index) => (
+                  {voteRecords.slice(0, 6).map((record) => (
                     <VoteDataCard 
                       key={record.hash} 
                       data={record} 
@@ -212,10 +197,14 @@ const Index = () => {
           <TabsContent value="stats">
             <StatsOverview 
               totalVotes={totalVotes}
-              totalSections={voteRecords.length}
-              verifiedCount={verifiedCount}
-              pendingCount={pendingCount}
+              totalSections={stats.totalProcessed}
+              verifiedCount={stats.confirmedCount}
+              pendingCount={stats.pendingCount}
             />
+          </TabsContent>
+
+          <TabsContent value="export">
+            <DataExport />
           </TabsContent>
 
           <TabsContent value="security">
