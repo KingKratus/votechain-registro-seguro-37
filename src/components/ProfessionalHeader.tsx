@@ -17,24 +17,19 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useWallet } from '@/hooks/useWallet';
 
-interface ProfessionalHeaderProps {
-  walletConnected: boolean;
-  onConnectWallet: () => void;
-}
-
-const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHeaderProps) => {
+const ProfessionalHeader = () => {
   const { toast } = useToast();
   const wallet = useWallet();
-  const [notifications, setNotifications] = useState(3);
+  const [notifications, setNotifications] = useState(0);
   const [showWalletDetails, setShowWalletDetails] = useState(false);
 
   useEffect(() => {
     // Simular notificações em tempo real
     const interval = setInterval(() => {
-      if (Math.random() > 0.7) {
+      if (Math.random() > 0.85) {
         setNotifications(prev => prev + 1);
       }
-    }, 30000);
+    }, 45000);
 
     return () => clearInterval(interval);
   }, []);
@@ -42,15 +37,14 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
   const handleConnectWallet = async () => {
     try {
       await wallet.connectWallet();
-      onConnectWallet();
       toast({
         title: "Carteira Conectada",
         description: `Conectado com ${wallet.address?.substring(0, 6)}...${wallet.address?.substring(-4)}`,
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Erro na Conexão",
-        description: "Não foi possível conectar a carteira. Tente novamente.",
+        description: error.message || "Não foi possível conectar a carteira. Tente novamente.",
         variant: "destructive",
       });
     }
@@ -78,15 +72,15 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
   const handleNotifications = () => {
     setNotifications(0);
     toast({
-      title: "Notificações",
-      description: `Você tem ${notifications} notificações não lidas.`,
+      title: "Notificações Lidas",
+      description: "Todas as notificações foram marcadas como lidas.",
     });
   };
 
   const handleSettings = () => {
     toast({
       title: "Configurações",
-      description: "Abrindo painel de configurações...",
+      description: "Abrindo painel de configurações do sistema...",
     });
   };
 
@@ -102,6 +96,16 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
       11155111: 'Sepolia'
     };
     return networks[chainId] || `Chain ${chainId}`;
+  };
+
+  const getExplorerUrl = (address: string, chainId: number) => {
+    const explorers: Record<number, string> = {
+      1: 'https://etherscan.io/address/',
+      137: 'https://polygonscan.com/address/',
+      56: 'https://bscscan.com/address/',
+      11155111: 'https://sepolia.etherscan.io/address/'
+    };
+    return explorers[chainId] ? `${explorers[chainId]}${address}` : null;
   };
 
   return (
@@ -142,7 +146,9 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
             <Button variant="ghost" size="sm" className="relative" onClick={handleNotifications}>
               <Bell className="w-4 h-4" />
               {notifications > 0 && (
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                  {notifications}
+                </span>
               )}
             </Button>
 
@@ -187,7 +193,7 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
                           <div>
                             <p className="text-sm font-medium">Endereço:</p>
                             <div className="flex items-center space-x-2">
-                              <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              <code className="text-xs bg-gray-100 px-2 py-1 rounded break-all">
                                 {wallet.address}
                               </code>
                               <Button variant="ghost" size="sm" onClick={copyAddress}>
@@ -206,14 +212,16 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
                             </p>
                           </div>
                           <div className="flex space-x-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => window.open(`https://etherscan.io/address/${wallet.address}`, '_blank')}
-                            >
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              Ver no Explorer
-                            </Button>
+                            {wallet.address && wallet.chainId && getExplorerUrl(wallet.address, wallet.chainId) && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => window.open(getExplorerUrl(wallet.address!, wallet.chainId!), '_blank')}
+                              >
+                                <ExternalLink className="w-3 h-3 mr-1" />
+                                Explorer
+                              </Button>
+                            )}
                             <Button variant="outline" size="sm" onClick={handleDisconnectWallet}>
                               <LogOut className="w-3 h-3 mr-1" />
                               Desconectar
@@ -242,15 +250,15 @@ const ProfessionalHeader = ({ walletConnected, onConnectWallet }: ProfessionalHe
         <div className="border-t border-gray-100 py-2">
           <div className="flex items-center justify-between text-xs text-gray-500">
             <div className="flex items-center space-x-4">
-              <span>Última sincronização: há 2 minutos</span>
+              <span>Última sincronização: {new Date().toLocaleTimeString('pt-BR')}</span>
               <span>•</span>
               <span>Rede: {wallet.chainId ? getNetworkName(wallet.chainId) : 'Desconectado'}</span>
               <span>•</span>
-              <span>Gas: 25 gwei</span>
+              <span>Status: {wallet.isConnected ? 'Conectado' : 'Desconectado'}</span>
             </div>
             <div className="flex items-center space-x-2">
               <div className={`w-2 h-2 rounded-full ${wallet.isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
-              <span>{wallet.isConnected ? 'Sistema Operacional' : 'Desconectado'}</span>
+              <span>{wallet.isConnected ? 'Sistema Operacional' : 'Aguardando Conexão'}</span>
             </div>
           </div>
         </div>

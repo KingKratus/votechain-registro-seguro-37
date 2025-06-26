@@ -11,34 +11,22 @@ import ValidationDetails from '@/components/ValidationDetails';
 import DataExport from '@/components/DataExport';
 import NotificationCenter from '@/components/NotificationCenter';
 import { useToast } from '@/hooks/use-toast';
+import { useWallet } from '@/hooks/useWallet';
 import { TSEBoletim } from '@/types/tse';
 import { dataManager } from '@/utils/dataManager';
 import { validateTSEBoletim } from '@/utils/tseValidator';
 
 const Index = () => {
-  const [walletConnected, setWalletConnected] = useState(false);
   const [voteRecords, setVoteRecords] = useState<TSEBoletim[]>([]);
   const [lastValidation, setLastValidation] = useState<any>(null);
   const { toast } = useToast();
+  const wallet = useWallet();
 
   // Carregar dados do cache na inicialização
   useEffect(() => {
     const cachedRecords = dataManager.getAllBoletins();
     setVoteRecords(cachedRecords);
   }, []);
-
-  const handleConnectWallet = () => {
-    if (!walletConnected) {
-      // Simular conexão da carteira
-      setTimeout(() => {
-        setWalletConnected(true);
-        toast({
-          title: "Carteira Conectada",
-          description: "MetaMask conectada com sucesso!",
-        });
-      }, 1000);
-    }
-  };
 
   const handleScanResult = (data: TSEBoletim) => {
     console.log('Novo boletim recebido:', data);
@@ -68,44 +56,8 @@ const Index = () => {
   };
 
   const handleRegisterVote = (data: TSEBoletim) => {
-    if (!walletConnected) {
-      toast({
-        title: "Carteira Não Conectada",
-        description: "Por favor, conecte sua carteira primeiro.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Verificar score de validação
-    if (data.validationScore && data.validationScore < 80) {
-      toast({
-        title: "Score de Validação Baixo",
-        description: `Score: ${data.validationScore}/100. Recomendado: mínimo 80 pontos.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Simular registro na blockchain
-    dataManager.updateBoletimStatus(data.hash, 'pending');
+    // Atualizar a lista local após registro
     setVoteRecords(dataManager.getAllBoletins());
-
-    toast({
-      title: "Registrando na Blockchain",
-      description: `Smart contract sendo criado para Seção ${data.secao}...`,
-    });
-
-    // Simular confirmação após alguns segundos
-    setTimeout(() => {
-      dataManager.updateBoletimStatus(data.hash, 'confirmed');
-      setVoteRecords(dataManager.getAllBoletins());
-
-      toast({
-        title: "Smart Contract Criado",
-        description: `Boletim da Seção ${data.secao} registrado com sucesso na blockchain!`,
-      });
-    }, 3000);
   };
 
   // Calcular estatísticas usando o gerenciador de dados
@@ -117,10 +69,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
-      <ProfessionalHeader 
-        walletConnected={walletConnected} 
-        onConnectWallet={handleConnectWallet} 
-      />
+      <ProfessionalHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Hero Section */}

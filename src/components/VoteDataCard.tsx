@@ -102,13 +102,15 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
       // Aguardar confirmação
       const receipt = await wallet.web3.eth.getTransactionReceipt(transactionHash);
       
-      if (receipt.status) {
-        onRegister({ ...data, status: 'confirmed' });
+      if (receipt && receipt.status) {
+        data.status = 'confirmed';
+        onRegister(data);
         toast({
           title: "Registro Confirmado",
           description: `Boletim registrado com sucesso na blockchain!`,
         });
       } else {
+        data.status = 'failed';
         toast({
           title: "Transação Falhou",
           description: "A transação foi rejeitada pela rede.",
@@ -118,9 +120,21 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
 
     } catch (error: any) {
       console.error('Erro ao registrar na blockchain:', error);
+      let errorMessage = "Erro desconhecido ao registrar na blockchain.";
+      
+      if (error.message.includes('insufficient funds')) {
+        errorMessage = "Saldo insuficiente para pagar as taxas de gas.";
+      } else if (error.message.includes('user rejected')) {
+        errorMessage = "Transação rejeitada pelo usuário.";
+      } else if (error.message.includes('network')) {
+        errorMessage = "Erro de rede. Verifique sua conexão.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Erro no Registro",
-        description: error.message || "Erro desconhecido ao registrar na blockchain.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -145,7 +159,7 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
   };
 
   return (
-    <Card className="hover:shadow-lg transition-shadow duration-200">
+    <Card className="hover:shadow-lg transition-shadow duration-200 border-l-4 border-l-blue-500">
       <CardContent className="p-6">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center space-x-2">
@@ -178,14 +192,14 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
             <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-3 rounded">
               <div className="flex items-center space-x-1">
                 <Users className="w-3 h-3 text-gray-500" />
-                <span>Aptos: {data.dadosTSE.totalEleitoresAptos}</span>
+                <span>Aptos: {data.dadosTSE.totalEleitoresAptos.toLocaleString()}</span>
               </div>
               <div className="flex items-center space-x-1">
                 <Vote className="w-3 h-3 text-gray-500" />
-                <span>Comparecimento: {data.dadosTSE.totalComparecimento}</span>
+                <span>Comparecimento: {data.dadosTSE.totalComparecimento.toLocaleString()}</span>
               </div>
-              <div>Faltas: {data.dadosTSE.totalFaltas}</div>
-              <div>Data: {data.dadosTSE.dataEleicao}</div>
+              <div>Faltas: {data.dadosTSE.totalFaltas.toLocaleString()}</div>
+              <div>Data: {new Date(data.dadosTSE.dataEleicao).toLocaleDateString('pt-BR')}</div>
             </div>
           )}
           
@@ -197,7 +211,7 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
                   <span className="text-gray-600">
                     {candidato.replace('candidato_', 'Candidato ')}:
                   </span>
-                  <span className="font-medium">{votos}</span>
+                  <span className="font-medium">{votos.toLocaleString()}</span>
                 </div>
               ))}
               
@@ -205,11 +219,11 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
                 <>
                   <div className="flex justify-between items-center border-t pt-1">
                     <span className="text-gray-600">Brancos:</span>
-                    <span className="font-medium">{data.dadosTSE.votosBrancos}</span>
+                    <span className="font-medium">{data.dadosTSE.votosBrancos.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-600">Nulos:</span>
-                    <span className="font-medium">{data.dadosTSE.votosNulos}</span>
+                    <span className="font-medium">{data.dadosTSE.votosNulos.toLocaleString()}</span>
                   </div>
                 </>
               )}
@@ -219,8 +233,13 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
           <div className="pt-2 border-t">
             <div className="flex justify-between font-semibold">
               <span>Total de Votos:</span>
-              <span>{totalVotos}</span>
+              <span>{totalVotos.toLocaleString()}</span>
             </div>
+            {data.validationScore && (
+              <div className="mt-1 text-sm text-gray-600">
+                Score de Validação: {data.validationScore}%
+              </div>
+            )}
           </div>
         </div>
 
