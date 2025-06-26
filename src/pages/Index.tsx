@@ -8,25 +8,35 @@ import StatsOverview from '@/components/StatsOverview';
 import SecurityInfo from '@/components/SecurityInfo';
 import { useToast } from '@/hooks/use-toast';
 
-interface VoteData {
+interface TSEBoletim {
   secao: number;
   zona: number;
   municipio: string;
   estado: string;
   timestamp: string;
   hash: string;
-  votos: {
-    candidato1: number;
-    candidato2: number;
-    brancos: number;
-    nulos: number;
+  votos: Record<string, number>;
+  dadosTSE?: {
+    versaoQR: string;
+    dataEleicao: string;
+    turno: number;
+    codigoMunicipio: number;
+    totalEleitoresAptos: number;
+    totalComparecimento: number;
+    totalFaltas: number;
+    horaAbertura: string;
+    horaFechamento: string;
+    votosBrancos: number;
+    votosNulos: number;
+    totalVotosNominais: number;
+    assinatura: string;
   };
   status?: 'pending' | 'confirmed' | 'failed';
 }
 
 const Index = () => {
   const [walletConnected, setWalletConnected] = useState(false);
-  const [voteRecords, setVoteRecords] = useState<VoteData[]>([]);
+  const [voteRecords, setVoteRecords] = useState<TSEBoletim[]>([]);
   const { toast } = useToast();
 
   const handleConnectWallet = () => {
@@ -42,23 +52,44 @@ const Index = () => {
     }
   };
 
-  const handleScanResult = (data: VoteData) => {
-    // Verificar se já existe registro com mesmo hash
-    const isDuplicate = voteRecords.some(record => record.hash === data.hash);
+  const handleScanResult = (data: TSEBoletim) => {
+    console.log('Novo boletim recebido:', data);
     
-    if (isDuplicate) {
+    // Verificar duplicatas por hash (principal) e também por seção/zona
+    const isDuplicateHash = voteRecords.some(record => record.hash === data.hash);
+    const isDuplicateSection = voteRecords.some(record => 
+      record.secao === data.secao && 
+      record.zona === data.zona &&
+      record.municipio === data.municipio
+    );
+    
+    if (isDuplicateHash) {
       toast({
-        title: "Registro Duplicado",
-        description: "Este boletim já foi registrado anteriormente.",
+        title: "Boletim Duplicado - Hash",
+        description: "Este boletim já foi registrado anteriormente (mesmo hash).",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (isDuplicateSection) {
+      toast({
+        title: "Boletim Duplicado - Seção",
+        description: `Já existe um registro para Seção ${data.secao}, Zona ${data.zona} em ${data.municipio}.`,
         variant: "destructive",
       });
       return;
     }
 
     setVoteRecords(prev => [data, ...prev]);
+    
+    toast({
+      title: "Boletim TSE Adicionado",
+      description: `Seção ${data.secao}, Zona ${data.zona} - ${data.municipio}`,
+    });
   };
 
-  const handleRegisterVote = (data: VoteData) => {
+  const handleRegisterVote = (data: TSEBoletim) => {
     if (!walletConnected) {
       toast({
         title: "Carteira Não Conectada",
@@ -79,7 +110,7 @@ const Index = () => {
 
     toast({
       title: "Registrando na Blockchain",
-      description: "Aguarde a confirmação da transação...",
+      description: `Smart contract sendo criado para Seção ${data.secao}...`,
     });
 
     // Simular confirmação após alguns segundos
@@ -93,14 +124,15 @@ const Index = () => {
       );
 
       toast({
-        title: "Registro Confirmado",
-        description: "Boletim registrado com sucesso na blockchain!",
+        title: "Smart Contract Criado",
+        description: `Boletim da Seção ${data.secao} registrado com sucesso na blockchain!`,
       });
     }, 3000);
   };
 
   const totalVotes = voteRecords.reduce((sum, record) => {
-    return sum + Object.values(record.votos).reduce((s, v) => s + v, 0);
+    return sum + (record.dadosTSE?.totalComparecimento || 
+      Object.values(record.votos).reduce((s, v) => s + v, 0));
   }, 0);
 
   const verifiedCount = voteRecords.filter(r => r.status === 'confirmed').length;
@@ -116,17 +148,17 @@ const Index = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Sistema Descentralizado de Registro Eleitoral
+            Sistema Descentralizado de Registro Eleitoral - TSE
           </h2>
           <p className="text-lg text-gray-600 max-w-3xl">
-            Garanta a transparência e integridade do processo eleitoral através da 
-            tecnologia blockchain. Registre boletins de urna de forma segura e auditável.
+            Processe boletins de urna oficiais do TSE e registre-os de forma segura na blockchain. 
+            Sistema com proteção anti-duplicação e validação de integridade.
           </p>
         </div>
 
         <Tabs defaultValue="scanner" className="space-y-6">
           <TabsList className="grid w-full grid-cols-4 lg:w-2/3">
-            <TabsTrigger value="scanner">Scanner</TabsTrigger>
+            <TabsTrigger value="scanner">Scanner TSE</TabsTrigger>
             <TabsTrigger value="records">Registros</TabsTrigger>
             <TabsTrigger value="stats">Estatísticas</TabsTrigger>
             <TabsTrigger value="security">Segurança</TabsTrigger>
@@ -161,8 +193,8 @@ const Index = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum Registro Encontrado</h3>
-                <p className="text-gray-500">Escaneie um QR code para começar a registrar boletins.</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhum Boletim TSE Processado</h3>
+                <p className="text-gray-500">Escaneie ou insira um QR code do TSE para começar.</p>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">

@@ -2,31 +2,42 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, MapPin } from 'lucide-react';
+import { CheckCircle, Clock, MapPin, Vote, Users } from 'lucide-react';
 
-interface VoteData {
+interface TSEBoletim {
   secao: number;
   zona: number;
   municipio: string;
   estado: string;
   timestamp: string;
   hash: string;
-  votos: {
-    candidato1: number;
-    candidato2: number;
-    brancos: number;
-    nulos: number;
+  votos: Record<string, number>;
+  dadosTSE?: {
+    versaoQR: string;
+    dataEleicao: string;
+    turno: number;
+    codigoMunicipio: number;
+    totalEleitoresAptos: number;
+    totalComparecimento: number;
+    totalFaltas: number;
+    horaAbertura: string;
+    horaFechamento: string;
+    votosBrancos: number;
+    votosNulos: number;
+    totalVotosNominais: number;
+    assinatura: string;
   };
   status?: 'pending' | 'confirmed' | 'failed';
 }
 
 interface VoteDataCardProps {
-  data: VoteData;
-  onRegister: (data: VoteData) => void;
+  data: TSEBoletim;
+  onRegister: (data: TSEBoletim) => void;
 }
 
 const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
-  const totalVotos = Object.values(data.votos).reduce((sum, votes) => sum + votes, 0);
+  const totalVotos = data.dadosTSE?.totalComparecimento || 
+    Object.values(data.votos).reduce((sum, votes) => sum + votes, 0);
   
   const getStatusColor = (status?: string) => {
     switch (status) {
@@ -36,6 +47,10 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const candidatosVotos = Object.entries(data.votos)
+    .filter(([key]) => key.startsWith('candidato_'))
+    .sort((a, b) => b[1] - a[1]);
 
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
@@ -60,28 +75,52 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
         <div className="space-y-3 mb-4">
           <div className="text-sm text-gray-600">
             {data.municipio}, {data.estado}
+            {data.dadosTSE && (
+              <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                TSE Turno {data.dadosTSE.turno}
+              </span>
+            )}
           </div>
           
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span>Candidato 1:</span>
-                <span className="font-medium">{data.votos.candidato1}</span>
+          {data.dadosTSE && (
+            <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-3 rounded">
+              <div className="flex items-center space-x-1">
+                <Users className="w-3 h-3 text-gray-500" />
+                <span>Aptos: {data.dadosTSE.totalEleitoresAptos}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Candidato 2:</span>
-                <span className="font-medium">{data.votos.candidato2}</span>
+              <div className="flex items-center space-x-1">
+                <Vote className="w-3 h-3 text-gray-500" />
+                <span>Comparecimento: {data.dadosTSE.totalComparecimento}</span>
               </div>
+              <div>Faltas: {data.dadosTSE.totalFaltas}</div>
+              <div>Data: {data.dadosTSE.dataEleicao}</div>
             </div>
-            <div className="space-y-1">
-              <div className="flex justify-between">
-                <span>Brancos:</span>
-                <span className="font-medium">{data.votos.brancos}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Nulos:</span>
-                <span className="font-medium">{data.votos.nulos}</span>
-              </div>
+          )}
+          
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm">Votos por Candidato:</h4>
+            <div className="grid grid-cols-1 gap-1 text-sm max-h-32 overflow-y-auto">
+              {candidatosVotos.map(([candidato, votos]) => (
+                <div key={candidato} className="flex justify-between items-center">
+                  <span className="text-gray-600">
+                    {candidato.replace('candidato_', 'Candidato ')}:
+                  </span>
+                  <span className="font-medium">{votos}</span>
+                </div>
+              ))}
+              
+              {data.dadosTSE && (
+                <>
+                  <div className="flex justify-between items-center border-t pt-1">
+                    <span className="text-gray-600">Brancos:</span>
+                    <span className="font-medium">{data.dadosTSE.votosBrancos}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Nulos:</span>
+                    <span className="font-medium">{data.dadosTSE.votosNulos}</span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
@@ -97,6 +136,11 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
           <div className="text-xs text-gray-500">
             Hash: {data.hash.substring(0, 20)}...
           </div>
+          {data.dadosTSE?.assinatura && (
+            <div className="text-xs text-gray-500">
+              Assinatura TSE: {data.dadosTSE.assinatura.substring(0, 20)}...
+            </div>
+          )}
           <div className="text-xs text-gray-500">
             {new Date(data.timestamp).toLocaleString('pt-BR')}
           </div>
