@@ -1,8 +1,12 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, MapPin, Vote, Users } from 'lucide-react';
+import { CheckCircle, Clock, MapPin, Vote, Users, ExternalLink, AlertTriangle } from 'lucide-react';
 import { TSEBoletim } from '@/types/tse';
+import { useWallet } from '@/hooks/useWallet';
+import { BlockchainService } from '@/services/blockchainService';
+import { useToast } from '@/hooks/use-toast';
 
 interface VoteDataCardProps {
   data: TSEBoletim;
@@ -10,6 +14,11 @@ interface VoteDataCardProps {
 }
 
 const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const wallet = useWallet();
+  const { toast } = useToast();
+
   const totalVotos = data.dadosTSE?.totalComparecimento || 
     Object.values(data.votos).reduce((sum, votes) => sum + votes, 0);
   
@@ -37,6 +46,104 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
     .filter(([key]) => key.startsWith('candidato_'))
     .sort((a, b) => b[1] - a[1]);
 
+  const handleRegisterOnBlockchain = async () => {
+    if (!wallet.isConnected || !wallet.web3 || !wallet.address) {
+      toast({
+        title: "Carteira Não Conectada",
+        description: "Por favor, conecte sua carteira primeiro.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (data.validationScore && data.validationScore < 80) {
+      toast({
+        title: "Score de Validação Baixo",
+        description: `Score: ${data.validationScore}/100. Recomendado: mínimo 80 pontos.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsRegistering(true);
+    
+    try {
+      const blockchainService = new BlockchainService(
+        wallet.web3,
+        wallet.address,
+        wallet.chainId || 1
+      );
+
+      // Verificar se já está registrado
+      const isAlreadyRegistered = await blockchainService.verificarBoletim(data.hash);
+      if (isAlreadyRegistered) {
+        toast({
+          title: "Boletim Já Registrado",
+          description: "Este boletim já foi registrado na blockchain.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Iniciando Registro",
+        description: "Preparando transação na blockchain...",
+      });
+
+      // Registrar na blockchain
+      const transactionHash = await blockchainService.registrarBoletim(data);
+      setTxHash(transactionHash);
+
+      toast({
+        title: "Transação Enviada",
+        description: `Hash: ${transactionHash.substring(0, 10)}...`,
+      });
+
+      // Aguardar confirmação
+      const receipt = await wallet.web3.eth.getTransactionReceipt(transactionHash);
+      
+      if (receipt.status) {
+        onRegister({ ...data, status: 'confirmed' });
+        toast({
+          title: "Registro Confirmado",
+          description: `Boletim registrado com sucesso na blockchain!`,
+        });
+      } else {
+        toast({
+          title: "Transação Falhou",
+          description: "A transação foi rejeitada pela rede.",
+          variant: "destructive",
+        });
+      }
+
+    } catch (error: any) {
+      console.error('Erro ao registrar na blockchain:', error);
+      toast({
+        title: "Erro no Registro",
+        description: error.message || "Erro desconhecido ao registrar na blockchain.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRegistering(false);
+    }
+  };
+
+  const openTransactionInExplorer = () => {
+    if (txHash && wallet.chainId) {
+      const explorers: Record<number, string> = {
+        1: 'https://etherscan.io/tx/',
+        137: 'https://polygonscan.com/tx/',
+        56: 'https://bscscan.com/tx/',
+        11155111: 'https://sepolia.etherscan.io/tx/'
+      };
+      
+      const baseUrl = explorers[wallet.chainId];
+      if (baseUrl) {
+        window.open(`${baseUrl}${txHash}`, '_blank');
+      }
+    }
+  };
+
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
       <CardContent className="p-6">
@@ -51,6 +158,7 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
             <Badge className={getStatusColor(data.status)}>
               {data.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
               {data.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
+              {data.status === 'invalid' && <AlertTriangle className="w-3 h-3 mr-1" />}
               {getStatusLabel(data.status)}
             </Badge>
           )}
@@ -128,14 +236,33 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
           <div className="text-xs text-gray-500">
             {new Date(data.timestamp).toLocaleString('pt-BR')}
           </div>
+          {txHash && (
+            <button
+              onClick={openTransactionInExplorer}
+              className="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1"
+            >
+              <span>Ver transação</span>
+              <ExternalLink className="w-3 h-3" />
+            </button>
+          )}
         </div>
 
-        {!data.status && (
+        {data.status !== 'confirmed' && data.status !== 'pending' && (
           <button
-            onClick={() => onRegister(data)}
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded-lg transition-colors font-medium"
+            onClick={handleRegisterOnBlockchain}
+            disabled={isRegistering || !wallet.isConnected}
+            className={`w-full mt-4 py-2 px-4 rounded-lg transition-colors font-medium ${
+              isRegistering || !wallet.isConnected
+                ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
           >
-            Registrar na Blockchain
+            {isRegistering 
+              ? 'Registrando na Blockchain...' 
+              : !wallet.isConnected
+              ? 'Conecte a Carteira para Registrar'
+              : 'Registrar na Blockchain'
+            }
           </button>
         )}
       </CardContent>
