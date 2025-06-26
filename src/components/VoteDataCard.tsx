@@ -1,34 +1,8 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock, MapPin, Vote, Users } from 'lucide-react';
-
-interface TSEBoletim {
-  secao: number;
-  zona: number;
-  municipio: string;
-  estado: string;
-  timestamp: string;
-  hash: string;
-  votos: Record<string, number>;
-  dadosTSE?: {
-    versaoQR: string;
-    dataEleicao: string;
-    turno: number;
-    codigoMunicipio: number;
-    totalEleitoresAptos: number;
-    totalComparecimento: number;
-    totalFaltas: number;
-    horaAbertura: string;
-    horaFechamento: string;
-    votosBrancos: number;
-    votosNulos: number;
-    totalVotosNominais: number;
-    assinatura: string;
-  };
-  status?: 'pending' | 'confirmed' | 'failed';
-}
+import { TSEBoletim } from '@/types/tse';
 
 interface VoteDataCardProps {
   data: TSEBoletim;
@@ -44,7 +18,18 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
       case 'confirmed': return 'bg-green-100 text-green-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'failed': return 'bg-red-100 text-red-800';
+      case 'invalid': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusLabel = (status?: string) => {
+    switch (status) {
+      case 'confirmed': return 'Confirmado';
+      case 'pending': return 'Pendente';
+      case 'failed': return 'Falhou';
+      case 'invalid': return 'Inválido';
+      default: return 'Novo';
     }
   };
 
@@ -66,8 +51,7 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
             <Badge className={getStatusColor(data.status)}>
               {data.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
               {data.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
-              {data.status === 'confirmed' ? 'Confirmado' : 
-               data.status === 'pending' ? 'Pendente' : 'Falhou'}
+              {getStatusLabel(data.status)}
             </Badge>
           )}
         </div>
