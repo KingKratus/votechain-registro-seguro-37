@@ -1,4 +1,3 @@
-
 import Web3 from 'web3';
 import { TSEBoletim } from '@/types/tse';
 
@@ -33,12 +32,12 @@ const VOTE_CONTRACT_ABI = [
   }
 ];
 
-// Endereços dos contratos por rede (substitua pelos endereços reais)
+// Endereços dos contratos por rede - usando endereços de demonstração
 const CONTRACT_ADDRESSES: Record<number, string> = {
-  1: '0x...', // Ethereum Mainnet - substitua pelo endereço real
-  137: '0x...', // Polygon - substitua pelo endereço real
-  56: '0x...', // BSC - substitua pelo endereço real
-  11155111: '0x...' // Sepolia Testnet - substitua pelo endereço real
+  1: '0x742d35Cc6634C0532925a3b8D400632B10bb6185', // Ethereum Mainnet
+  137: '0x742d35Cc6634C0532925a3b8D400632B10bb6185', // Polygon
+  56: '0x742d35Cc6634C0532925a3b8D400632B10bb6185', // BSC
+  11155111: '0x742d35Cc6634C0532925a3b8D400632B10bb6185' // Sepolia Testnet
 };
 
 export class BlockchainService {

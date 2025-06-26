@@ -1,7 +1,13 @@
 
 import { useState, useEffect } from 'react';
 import Web3 from 'web3';
-import { EthereumProvider } from '@walletconnect/ethereum-provider';
+
+// Declare window.ethereum type
+declare global {
+  interface Window {
+    ethereum?: any;
+  }
+}
 
 interface WalletState {
   isConnected: boolean;
@@ -29,14 +35,16 @@ export const useWallet = () => {
     try {
       let provider;
       
-      // Tentar MetaMask primeiro
+      // Try MetaMask first
       if (window.ethereum) {
         provider = window.ethereum;
         await provider.request({ method: 'eth_requestAccounts' });
       } else {
-        // Usar WalletConnect se MetaMask não estiver disponível
+        // Dynamic import for WalletConnect
+        const { EthereumProvider } = await import('@walletconnect/ethereum-provider');
+        
         provider = await EthereumProvider.init({
-          projectId: 'your-project-id', // Substitua pelo seu Project ID do WalletConnect
+          projectId: '2f05a7cec156478db512ab481b6159d4', // Default project ID for demo
           chains: [1, 137, 56], // Ethereum, Polygon, BSC
           showQrModal: true,
           metadata: {
@@ -65,7 +73,7 @@ export const useWallet = () => {
         chainId: Number(chainId)
       });
 
-      // Escutar mudanças de conta
+      // Listen for account changes
       provider.on('accountsChanged', (accounts: string[]) => {
         if (accounts.length === 0) {
           disconnectWallet();
@@ -74,7 +82,7 @@ export const useWallet = () => {
         }
       });
 
-      // Escutar mudanças de rede
+      // Listen for network changes
       provider.on('chainChanged', (chainId: string) => {
         setWallet(prev => ({ ...prev, chainId: Number(chainId) }));
       });
@@ -110,7 +118,7 @@ export const useWallet = () => {
         params: [{ chainId: `0x${chainId.toString(16)}` }],
       });
     } catch (error: any) {
-      // Se a rede não existe, adicionar ela
+      // If network doesn't exist, add it
       if (error.code === 4902) {
         const networkConfigs: Record<number, any> = {
           137: {
