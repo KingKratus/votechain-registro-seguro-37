@@ -4,7 +4,7 @@ import QRCodeReader from '@/components/QRCodeReader';
 import ValidationDetails from '@/components/ValidationDetails';
 import NotificationCenter from '@/components/NotificationCenter';
 import VoteDataCard from '@/components/VoteDataCard';
-import BlockchainTester from '@/components/BlockchainTester';
+import ProductionTester from '@/components/ProductionTester';
 import { TSEBoletim } from '@/types/tse';
 
 interface ScannerTabProps {
@@ -17,8 +17,8 @@ interface ScannerTabProps {
 const ScannerTab = ({ onScanResult, lastValidation, voteRecords, onRegister }: ScannerTabProps) => {
   return (
     <div className="space-y-6">
-      {/* Testador de Blockchain */}
-      <BlockchainTester />
+      {/* Testador de Produção */}
+      <ProductionTester />
       
       <div className="grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
