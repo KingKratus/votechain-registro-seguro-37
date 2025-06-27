@@ -1,4 +1,3 @@
-
 import Web3 from 'web3';
 import { TSEBoletim } from '@/types/tse';
 
@@ -139,7 +138,7 @@ export class ProductionBlockchainService {
       return {
         success: true,
         transactionHash: receipt.transactionHash,
-        blockNumber: receipt.blockNumber,
+        blockNumber: Number(receipt.blockNumber),
         gasUsed: receipt.gasUsed.toString()
       };
 
@@ -229,20 +228,18 @@ export class ProductionBlockchainService {
         return null;
       }
 
-      const gasUsed = receipt.gasUsed;
-      const gasPrice = transaction.gasPrice || '0';
-      const transactionFee = this.web3.utils.fromWei(
-        (BigInt(gasPrice) * BigInt(gasUsed)).toString(),
-        'ether'
-      );
+      const gasUsed = Number(receipt.gasUsed);
+      const gasPrice = Number(transaction.gasPrice || '0');
+      const transactionFeeWei = gasPrice * gasUsed;
+      const transactionFee = this.web3.utils.fromWei(transactionFeeWei.toString(), 'ether');
 
       return {
         status: receipt.status,
-        blockNumber: receipt.blockNumber,
+        blockNumber: Number(receipt.blockNumber),
         gasUsed: gasUsed.toString(),
         gasPrice: gasPrice.toString(),
         transactionFee,
-        confirmations: await this.obterConfirmacoes(receipt.blockNumber)
+        confirmations: await this.obterConfirmacoes(Number(receipt.blockNumber))
       };
     } catch (error) {
       console.error('Erro ao obter informações da transação:', error);

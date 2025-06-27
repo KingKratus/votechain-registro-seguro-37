@@ -41,7 +41,7 @@ const ScannerTab = ({ onScanResult, lastValidation, voteRecords, onRegister }: S
               Boletins Processados Recentemente
             </h3>
             <div className="text-sm text-gray-500">
-              {voteRecords.length} de {voteRecords.length} boletins
+              {voteRecords.length} boletim{voteRecords.length !== 1 ? 's' : ''}
             </div>
           </div>
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">

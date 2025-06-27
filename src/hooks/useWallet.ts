@@ -1,7 +1,6 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Web3 from 'web3';
-import { EthereumProvider } from '@walletconnect/ethereum-provider';
 
 // Declare window.ethereum type
 declare global {
@@ -17,6 +16,7 @@ interface WalletState {
   provider: any;
   web3: Web3 | null;
   chainId: number | null;
+  error: string | null;
 }
 
 export const useWallet = () => {
@@ -26,81 +26,68 @@ export const useWallet = () => {
     balance: null,
     provider: null,
     web3: null,
-    chainId: null
+    chainId: null,
+    error: null
   });
 
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const connectWallet = async () => {
+  const clearError = useCallback(() => {
+    setWallet(prev => ({ ...prev, error: null }));
+  }, []);
+
+  const updateBalance = useCallback(async (web3: Web3, address: string) => {
+    try {
+      const balance = await web3.eth.getBalance(address);
+      const balanceInEth = web3.utils.fromWei(balance, 'ether');
+      return parseFloat(balanceInEth).toFixed(4);
+    } catch (error) {
+      console.error('Erro ao atualizar saldo:', error);
+      return '0.0000';
+    }
+  }, []);
+
+  const connectWallet = useCallback(async () => {
     setIsConnecting(true);
-    console.log('Iniciando conexão da carteira...');
+    clearError();
+    console.log('🔄 Iniciando conexão da carteira...');
     
     try {
-      let provider;
-      
-      // Try MetaMask first if available
       if (window.ethereum && window.ethereum.isMetaMask) {
-        console.log('MetaMask detectado, conectando...');
-        provider = window.ethereum;
-        await provider.request({ method: 'eth_requestAccounts' });
-      } else {
-        console.log('MetaMask não encontrado, usando WalletConnect...');
-        // Use WalletConnect for mobile wallets
-        provider = await EthereumProvider.init({
-          projectId: '2f05a7cec156478db512ab481b6159d4', // Free public project ID
-          chains: [1], // Ethereum mainnet
-          optionalChains: [137, 56, 11155111], // Polygon, BSC, Sepolia
-          showQrModal: true,
-          qrModalOptions: {
-            themeMode: 'light',
-            themeVariables: {
-              '--wcm-z-index': '1000'
-            }
-          },
-          metadata: {
-            name: 'TSE Blockchain',
-            description: 'Sistema Eleitoral Descentralizado',
-            url: typeof window !== 'undefined' ? window.location.origin : 'https://tse-blockchain.app',
-            icons: ['https://avatars.githubusercontent.com/u/37784886']
-          }
+        console.log('🦊 MetaMask detectado, conectando...');
+        
+        // Request account access
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
         });
         
-        console.log('WalletConnect provider inicializado, conectando...');
-        // Enable session (triggers the modal)
-        await provider.enable();
-      }
+        if (accounts.length === 0) {
+          throw new Error('Nenhuma conta disponível no MetaMask');
+        }
 
-      const web3 = new Web3(provider);
-      const accounts = await web3.eth.getAccounts();
-      console.log('Contas obtidas:', accounts);
-      
-      if (accounts.length === 0) {
-        throw new Error('Nenhuma conta encontrada');
-      }
-      
-      const chainId = await web3.eth.getChainId();
-      const balance = await web3.eth.getBalance(accounts[0]);
-      const balanceInEth = web3.utils.fromWei(balance, 'ether');
+        const web3 = new Web3(window.ethereum);
+        const chainId = await web3.eth.getChainId();
+        const balance = await updateBalance(web3, accounts[0]);
 
-      console.log('Carteira conectada com sucesso:', {
-        address: accounts[0],
-        chainId: Number(chainId),
-        balance: balanceInEth
-      });
+        console.log('✅ MetaMask conectado:', {
+          address: accounts[0],
+          chainId: Number(chainId),
+          balance
+        });
 
-      setWallet({
-        isConnected: true,
-        address: accounts[0],
-        balance: parseFloat(balanceInEth).toFixed(4),
-        provider,
-        web3,
-        chainId: Number(chainId)
-      });
+        setWallet({
+          isConnected: true,
+          address: accounts[0],
+          balance,
+          provider: window.ethereum,
+          web3,
+          chainId: Number(chainId),
+          error: null
+        });
 
-      // Listen for account changes
-      if (provider.on) {
-        provider.on('accountsChanged', (accounts: string[]) => {
-          console.log('Contas alteradas:', accounts);
+        // Setup event listeners
+        window.ethereum.on('accountsChanged', (accounts: string[]) => {
+          console.log('📝 Contas alteradas:', accounts);
           if (accounts.length === 0) {
             disconnectWallet();
           } else {
@@ -108,53 +95,56 @@ export const useWallet = () => {
           }
         });
 
-        // Listen for network changes
-        provider.on('chainChanged', (chainId: string) => {
-          console.log('Rede alterada:', chainId);
+        window.ethereum.on('chainChanged', (chainId: string) => {
+          console.log('🔗 Rede alterada:', chainId);
           setWallet(prev => ({ ...prev, chainId: parseInt(chainId, 16) }));
+          window.location.reload(); // Reload on network change
         });
 
-        // Listen for disconnect
-        provider.on('disconnect', (code: number, reason: string) => {
-          console.log('Carteira desconectada:', code, reason);
-          disconnectWallet();
-        });
+      } else {
+        throw new Error('MetaMask não encontrado. Por favor, instale o MetaMask.');
       }
 
     } catch (error: any) {
-      console.error('Erro ao conectar carteira:', error);
+      console.error('❌ Erro ao conectar carteira:', error);
+      const errorMessage = error.message || 'Erro desconhecido ao conectar carteira';
+      setWallet(prev => ({
+        ...prev,
+        error: errorMessage
+      }));
       throw error;
     } finally {
       setIsConnecting(false);
     }
-  };
+  }, [clearError, updateBalance]);
 
-  const disconnectWallet = () => {
-    console.log('Desconectando carteira...');
-    if (wallet.provider?.disconnect) {
-      wallet.provider.disconnect();
-    }
+  const disconnectWallet = useCallback(() => {
+    console.log('🔌 Desconectando carteira...');
     setWallet({
       isConnected: false,
       address: null,
       balance: null,
       provider: null,
       web3: null,
-      chainId: null
+      chainId: null,
+      error: null
     });
-  };
+  }, []);
 
-  const switchNetwork = async (chainId: number) => {
-    if (!wallet.provider) return;
+  const switchNetwork = useCallback(async (chainId: number) => {
+    if (!wallet.provider) {
+      throw new Error('Carteira não conectada');
+    }
     
-    console.log(`Trocando para rede ${chainId}...`);
+    console.log(`🔄 Trocando para rede ${chainId}...`);
     try {
       await wallet.provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${chainId.toString(16)}` }],
       });
     } catch (error: any) {
-      console.error('Erro ao trocar rede:', error);
+      console.error('❌ Erro ao trocar rede:', error);
+      
       // If network doesn't exist, add it
       if (error.code === 4902) {
         const networkConfigs: Record<number, any> = {
@@ -165,17 +155,10 @@ export const useWallet = () => {
             rpcUrls: ['https://polygon-rpc.com/'],
             blockExplorerUrls: ['https://polygonscan.com/']
           },
-          56: {
-            chainId: '0x38',
-            chainName: 'BNB Smart Chain',
-            nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
-            rpcUrls: ['https://bsc-dataseed.binance.org/'],
-            blockExplorerUrls: ['https://bscscan.com/']
-          },
           11155111: {
             chainId: '0xaa36a7',
             chainName: 'Sepolia Testnet',
-            nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+            nativeCuracy: { name: 'ETH', symbol: 'ETH', decimals: 18 },
             rpcUrls: ['https://sepolia.infura.io/v3/'],
             blockExplorerUrls: ['https://sepolia.etherscan.io/']
           }
@@ -188,46 +171,47 @@ export const useWallet = () => {
           });
         }
       }
+      throw error;
     }
-  };
+  }, [wallet.provider]);
 
   // Auto-connect on page load if previously connected
   useEffect(() => {
     const autoConnect = async () => {
       try {
-        // Check if MetaMask is connected
         if (window.ethereum && window.ethereum.isMetaMask) {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
-            console.log('Auto-conectando com MetaMask...');
+            console.log('🔄 Auto-conectando com MetaMask...');
             const web3 = new Web3(window.ethereum);
             const chainId = await web3.eth.getChainId();
-            const balance = await web3.eth.getBalance(accounts[0]);
-            const balanceInEth = web3.utils.fromWei(balance, 'ether');
+            const balance = await updateBalance(web3, accounts[0]);
 
             setWallet({
               isConnected: true,
               address: accounts[0],
-              balance: parseFloat(balanceInEth).toFixed(4),
+              balance,
               provider: window.ethereum,
               web3,
-              chainId: Number(chainId)
+              chainId: Number(chainId),
+              error: null
             });
           }
         }
       } catch (error) {
-        console.log('Auto-connect failed:', error);
+        console.log('⚠️ Auto-connect falhou:', error);
       }
     };
 
     autoConnect();
-  }, []);
+  }, [updateBalance]);
 
   return {
     ...wallet,
     isConnecting,
     connectWallet,
     disconnectWallet,
-    switchNetwork
+    switchNetwork,
+    clearError
   };
 };

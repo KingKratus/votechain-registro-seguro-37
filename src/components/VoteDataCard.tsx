@@ -28,17 +28,17 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'failed': return 'bg-red-100 text-red-800';
       case 'invalid': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      default: return 'bg-blue-100 text-blue-800';
     }
   };
 
   const getStatusLabel = (status?: string) => {
     switch (status) {
-      case 'confirmed': return 'Confirmado';
+      case 'confirmed': return 'Confirmado na Blockchain';
       case 'pending': return 'Pendente';
       case 'failed': return 'Falhou';
       case 'invalid': return 'Inválido';
-      default: return 'Novo';
+      default: return 'Pronto para Registro';
     }
   };
 
@@ -168,14 +168,12 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
               Seção {data.secao} - Zona {data.zona}
             </span>
           </div>
-          {data.status && (
-            <Badge className={getStatusColor(data.status)}>
-              {data.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
-              {data.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
-              {data.status === 'invalid' && <AlertTriangle className="w-3 h-3 mr-1" />}
-              {getStatusLabel(data.status)}
-            </Badge>
-          )}
+          <Badge className={getStatusColor(data.status)}>
+            {data.status === 'confirmed' && <CheckCircle className="w-3 h-3 mr-1" />}
+            {data.status === 'pending' && <Clock className="w-3 h-3 mr-1" />}
+            {data.status === 'invalid' && <AlertTriangle className="w-3 h-3 mr-1" />}
+            {getStatusLabel(data.status)}
+          </Badge>
         </div>
 
         <div className="space-y-3 mb-4">
@@ -266,7 +264,8 @@ const VoteDataCard = ({ data, onRegister }: VoteDataCardProps) => {
           )}
         </div>
 
-        {data.status !== 'confirmed' && data.status !== 'pending' && (
+        {/* Botão de Registro sempre visível quando não confirmado */}
+        {data.status !== 'confirmed' && (
           <button
             onClick={handleRegisterOnBlockchain}
             disabled={isRegistering || !wallet.isConnected}
