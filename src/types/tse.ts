@@ -25,6 +25,7 @@ export interface TSEBoletim {
   status?: 'pending' | 'confirmed' | 'failed' | 'invalid';
   validationScore?: number;
   processedAt?: string;
+  transactionHash?: string;
 }
 
 export interface ProcessingStats {
