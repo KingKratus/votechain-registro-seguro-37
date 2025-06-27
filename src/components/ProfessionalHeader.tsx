@@ -49,9 +49,21 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
         description: `Conectado com ${wallet.address?.substring(0, 6)}...${wallet.address?.substring(-4)}`,
       });
     } catch (error: any) {
+      console.error('Wallet connection error:', error);
+      
+      let errorMessage = "Não foi possível conectar a carteira.";
+      
+      if (error.message?.includes('User rejected')) {
+        errorMessage = "Conexão cancelada pelo usuário.";
+      } else if (error.message?.includes('No provider')) {
+        errorMessage = "Nenhuma carteira encontrada. Instale MetaMask ou use WalletConnect.";
+      } else if (error.code === 4001) {
+        errorMessage = "Conexão rejeitada. Tente novamente.";
+      }
+      
       toast({
         title: "Erro na Conexão",
-        description: error.message || "Não foi possível conectar a carteira. Verifique se você possui uma carteira digital instalada.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -142,6 +154,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
               variant="ghost" 
               size="sm" 
               onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="p-2"
             >
               <Menu className="w-5 h-5" />
             </Button>
@@ -153,10 +166,11 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
             <Button 
               variant="ghost" 
               size="sm" 
-              className="relative flex items-center space-x-2" 
+              className="relative flex items-center space-x-2 px-3 py-2" 
               onClick={handleNotifications}
             >
               <Bell className="w-4 h-4" />
+              <span className="hidden xl:inline">Notificações</span>
               {notifications > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                   {notifications > 9 ? '9+' : notifications}
@@ -169,7 +183,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
               variant="ghost" 
               size="sm" 
               onClick={onHelpClick}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 px-3 py-2"
             >
               <HelpCircle className="w-4 h-4" />
               <span className="hidden xl:inline">Ajuda</span>
@@ -180,17 +194,17 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
               variant="ghost" 
               size="sm" 
               onClick={onSettingsClick}
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-2 px-3 py-2"
             >
               <Settings className="w-4 h-4" />
-              <span className="hidden xl:inline">Config</span>
+              <span className="hidden xl:inline">Configurações</span>
             </Button>
 
             {/* Wallet Connection */}
             <div className="flex items-center space-x-2">
               {wallet.isConnected ? (
                 <div className="flex items-center space-x-2">
-                  <div className="flex items-center space-x-3 px-3 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center space-x-3 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                     <Wallet className="w-4 h-4 text-green-600" />
                     <div className="flex flex-col">
@@ -207,6 +221,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                       variant="ghost" 
                       size="sm" 
                       onClick={() => setShowWalletDetails(!showWalletDetails)}
+                      className="p-2"
                     >
                       <User className="w-4 h-4" />
                     </Button>
@@ -220,7 +235,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                               <code className="text-xs bg-gray-100 px-2 py-1 rounded break-all flex-1">
                                 {wallet.address}
                               </code>
-                              <Button variant="ghost" size="sm" onClick={copyAddress}>
+                              <Button variant="ghost" size="sm" onClick={copyAddress} className="p-1">
                                 <Copy className="w-3 h-3" />
                               </Button>
                             </div>
@@ -243,7 +258,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => window.open(getExplorerUrl(wallet.address!, wallet.chainId!), '_blank')}
-                                className="flex-1 flex items-center justify-center space-x-1"
+                                className="flex-1 flex items-center justify-center space-x-1 px-2 py-1"
                               >
                                 <ExternalLink className="w-3 h-3" />
                                 <span>Explorer</span>
@@ -253,7 +268,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                               variant="outline" 
                               size="sm" 
                               onClick={handleDisconnectWallet}
-                              className="flex-1 flex items-center justify-center space-x-1"
+                              className="flex-1 flex items-center justify-center space-x-1 px-2 py-1"
                             >
                               <LogOut className="w-3 h-3" />
                               <span>Sair</span>
@@ -268,7 +283,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                 <Button 
                   onClick={handleConnectWallet}
                   disabled={wallet.isConnecting}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white flex items-center space-x-2"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white flex items-center space-x-2 px-4 py-2"
                 >
                   <Wallet className="w-4 h-4" />
                   <span>{wallet.isConnecting ? 'Conectando...' : 'Conectar Carteira'}</span>
@@ -295,7 +310,7 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
               
               {/* Botões de Ação */}
               <div className="grid grid-cols-3 gap-2">
-                <Button variant="outline" size="sm" onClick={handleNotifications} className="flex items-center space-x-1">
+                <Button variant="outline" size="sm" onClick={handleNotifications} className="flex items-center space-x-1 px-2 py-2">
                   <Bell className="w-4 h-4" />
                   <span>Notificações</span>
                   {notifications > 0 && (
@@ -304,13 +319,13 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                     </span>
                   )}
                 </Button>
-                <Button variant="outline" size="sm" onClick={onHelpClick} className="flex items-center space-x-1">
+                <Button variant="outline" size="sm" onClick={onHelpClick} className="flex items-center space-x-1 px-2 py-2">
                   <HelpCircle className="w-4 h-4" />
                   <span>Ajuda</span>
                 </Button>
-                <Button variant="outline" size="sm" onClick={onSettingsClick} className="flex items-center space-x-1">
+                <Button variant="outline" size="sm" onClick={onSettingsClick} className="flex items-center space-x-1 px-2 py-2">
                   <Settings className="w-4 h-4" />
-                  <span>Config</span>
+                  <span>Configurações</span>
                 </Button>
               </div>
               
@@ -331,13 +346,13 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                       </div>
                     </div>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={copyAddress} className="flex-1">
-                        <Copy className="w-3 h-3 mr-1" />
-                        Copiar
+                      <Button variant="outline" size="sm" onClick={copyAddress} className="flex-1 flex items-center space-x-1 px-2 py-2">
+                        <Copy className="w-3 h-3" />
+                        <span>Copiar</span>
                       </Button>
-                      <Button variant="outline" size="sm" onClick={handleDisconnectWallet} className="flex-1">
-                        <LogOut className="w-3 h-3 mr-1" />
-                        Desconectar
+                      <Button variant="outline" size="sm" onClick={handleDisconnectWallet} className="flex-1 flex items-center space-x-1 px-2 py-2">
+                        <LogOut className="w-3 h-3" />
+                        <span>Desconectar</span>
                       </Button>
                     </div>
                   </div>
@@ -345,10 +360,10 @@ const ProfessionalHeader = ({ onSettingsClick, onHelpClick }: ProfessionalHeader
                   <Button 
                     onClick={handleConnectWallet}
                     disabled={wallet.isConnecting}
-                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white"
+                    className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white flex items-center space-x-2 px-4 py-2"
                   >
-                    <Wallet className="w-4 h-4 mr-2" />
-                    {wallet.isConnecting ? 'Conectando...' : 'Conectar Carteira'}
+                    <Wallet className="w-4 h-4" />
+                    <span>{wallet.isConnecting ? 'Conectando...' : 'Conectar Carteira'}</span>
                   </Button>
                 )}
               </div>
