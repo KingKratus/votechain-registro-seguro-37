@@ -1,6 +1,5 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { EthereumProvider } from '@walletconnect/ethereum-provider';
 import Web3 from 'web3';
 
 declare global {
@@ -83,110 +82,53 @@ export const useProductionWallet = () => {
     }
   }, []);
 
-  const connectMetaMask = useCallback(async () => {
-    if (!window.ethereum?.isMetaMask) {
-      throw new Error('MetaMask não encontrado');
-    }
-
-    const accounts = await window.ethereum.request({ 
-      method: 'eth_requestAccounts' 
-    });
-    
-    if (accounts.length === 0) {
-      throw new Error('Nenhuma conta disponível');
-    }
-
-    const web3 = new Web3(window.ethereum);
-    const chainId = await web3.eth.getChainId();
-    const balance = await updateBalance(web3, accounts[0]);
-
-    return {
-      provider: window.ethereum,
-      web3,
-      address: accounts[0],
-      chainId: Number(chainId),
-      balance
-    };
-  }, [updateBalance]);
-
-  const connectWalletConnect = useCallback(async () => {
-    const provider = await EthereumProvider.init({
-      projectId: '2f05a7cec156478db512ab481b6159d4',
-      chains: [1, 137, 11155111],
-      showQrModal: true,
-      qrModalOptions: {
-        themeMode: 'light' as const,
-        themeVariables: {
-          '--wcm-z-index': '1000'
-        }
-      },
-      metadata: {
-        name: 'TSE Blockchain',
-        description: 'Sistema Eleitoral Descentralizado',
-        url: window.location.origin,
-        icons: ['https://avatars.githubusercontent.com/u/37784886']
-      }
-    });
-
-    await provider.enable();
-    
-    const web3 = new Web3(provider);
-    const accounts = await web3.eth.getAccounts();
-    
-    if (accounts.length === 0) {
-      throw new Error('Nenhuma conta conectada');
-    }
-
-    const chainId = await web3.eth.getChainId();
-    const balance = await updateBalance(web3, accounts[0]);
-
-    return {
-      provider,
-      web3,
-      address: accounts[0],
-      chainId: Number(chainId),
-      balance
-    };
-  }, [updateBalance]);
-
-  const connectWallet = useCallback(async (preferredMethod?: 'metamask' | 'walletconnect') => {
+  const connectWallet = useCallback(async () => {
     setIsConnecting(true);
     clearError();
 
     try {
-      let connectionResult;
-
-      if (preferredMethod === 'metamask' || (window.ethereum?.isMetaMask && !preferredMethod)) {
-        connectionResult = await connectMetaMask();
-      } else {
-        connectionResult = await connectWalletConnect();
+      if (!window.ethereum?.isMetaMask) {
+        throw new Error('MetaMask não encontrado. Por favor, instale o MetaMask.');
       }
 
-      setWallet(prev => ({
-        ...prev,
+      const accounts = await window.ethereum.request({ 
+        method: 'eth_requestAccounts' 
+      });
+      
+      if (accounts.length === 0) {
+        throw new Error('Nenhuma conta disponível');
+      }
+
+      const web3 = new Web3(window.ethereum);
+      const chainId = await web3.eth.getChainId();
+      const balance = await updateBalance(web3, accounts[0]);
+
+      setWallet({
         isConnected: true,
-        ...connectionResult,
+        address: accounts[0],
+        balance,
+        provider: window.ethereum,
+        web3,
+        chainId: Number(chainId),
         error: null
-      }));
+      });
 
       // Setup event listeners
-      if (connectionResult.provider.on) {
-        connectionResult.provider.on('accountsChanged', (accounts: string[]) => {
-          if (accounts.length === 0) {
-            disconnectWallet();
-          } else {
-            setWallet(prev => ({ ...prev, address: accounts[0] }));
-          }
-        });
-
-        connectionResult.provider.on('chainChanged', (chainId: string) => {
-          setWallet(prev => ({ ...prev, chainId: parseInt(chainId, 16) }));
-        });
-
-        connectionResult.provider.on('disconnect', () => {
+      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+        if (accounts.length === 0) {
           disconnectWallet();
-        });
-      }
+        } else {
+          setWallet(prev => ({ ...prev, address: accounts[0] }));
+        }
+      });
+
+      window.ethereum.on('chainChanged', (chainId: string) => {
+        setWallet(prev => ({ ...prev, chainId: parseInt(chainId, 16) }));
+      });
+
+      window.ethereum.on('disconnect', () => {
+        disconnectWallet();
+      });
 
     } catch (error: any) {
       const errorMessage = error.message || 'Erro desconhecido ao conectar carteira';
@@ -198,13 +140,9 @@ export const useProductionWallet = () => {
     } finally {
       setIsConnecting(false);
     }
-  }, [connectMetaMask, connectWalletConnect, clearError]);
+  }, [clearError, updateBalance]);
 
   const disconnectWallet = useCallback(() => {
-    if (wallet.provider?.disconnect) {
-      wallet.provider.disconnect();
-    }
-    
     setWallet({
       isConnected: false,
       address: null,
@@ -214,7 +152,7 @@ export const useProductionWallet = () => {
       web3: null,
       error: null
     });
-  }, [wallet.provider]);
+  }, []);
 
   const switchNetwork = useCallback(async (targetChainId: number) => {
     if (!wallet.provider) {
@@ -250,7 +188,7 @@ export const useProductionWallet = () => {
         if (window.ethereum?.isMetaMask) {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
-            await connectWallet('metamask');
+            await connectWallet();
           }
         }
       } catch (error) {
