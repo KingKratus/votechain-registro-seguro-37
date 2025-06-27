@@ -3,7 +3,8 @@ import { TSEBoletim } from '@/types/tse';
 
 export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
   try {
-    console.log('Processando QR Code do TSE:', qrData.substring(0, 100) + '...');
+    console.log('=== PARSER TSE QR CODE ===');
+    console.log('Dados recebidos:', qrData.substring(0, 200) + '...');
     
     // Parse dos campos do QR code do TSE
     const campos = qrData.split(' ');
@@ -15,6 +16,8 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
         dadosParsed[chave] = valor;
       }
     });
+    
+    console.log('Campos parseados:', dadosParsed);
     
     // Extrair votos por candidato
     const votos: Record<string, number> = {};
@@ -33,17 +36,29 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
       }
     });
     
+    console.log('Votos por candidato:', votos);
+    console.log('Total votos nominais:', totalVotosNominais);
+    
     // Dados principais extraídos com validação
     const zona = parseInt(dadosParsed['ZONA'] || '0');
     const secao = parseInt(dadosParsed['SECA'] || '0');
     const codigoMunicipio = parseInt(dadosParsed['MUNI'] || '0');
-    const totalAptos = parseInt(dadosParsed['APTO'] || '0');
-    const comparecimento = parseInt(dadosParsed['COMP'] || '0');
+    const totalAptos = parseInt(dadosParsed['APTO'] || dadosParsed['APTA'] || '0');
+    const comparecimento = parseInt(dadosParsed['COMP'] || dadosParsed['TOTC'] || '0');
     const faltas = parseInt(dadosParsed['FALT'] || '0');
     const votosBrancos = parseInt(dadosParsed['BRAN'] || '0');
     const votosNulos = parseInt(dadosParsed['NULO'] || '0');
+    const votosNominaisField = parseInt(dadosParsed['NOMI'] || '0');
     const hash = dadosParsed['HASH'] || '';
     const assinatura = dadosParsed['ASSI'] || '';
+    
+    // Usar votos nominais do campo NOMI se disponível, senão calcular
+    const totalVotosNominaisCalculado = votosNominaisField || totalVotosNominais;
+    
+    console.log('Dados principais:', {
+      zona, secao, codigoMunicipio, totalAptos, comparecimento, 
+      faltas, votosBrancos, votosNulos, totalVotosNominaisCalculado, hash
+    });
     
     // Validação básica dos dados obrigatórios
     if (!zona || !secao || !hash) {
@@ -94,7 +109,7 @@ export const parseTSEQRCode = (qrData: string): TSEBoletim | null => {
         horaFechamento: dadosParsed['HRFC'] || '',
         votosBrancos,
         votosNulos,
-        totalVotosNominais,
+        totalVotosNominais: totalVotosNominaisCalculado,
         assinatura
       }
     };

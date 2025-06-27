@@ -33,14 +33,18 @@ export const useWallet = () => {
 
   const connectWallet = async () => {
     setIsConnecting(true);
+    console.log('Iniciando conexão da carteira...');
+    
     try {
       let provider;
       
       // Try MetaMask first if available
       if (window.ethereum && window.ethereum.isMetaMask) {
+        console.log('MetaMask detectado, conectando...');
         provider = window.ethereum;
         await provider.request({ method: 'eth_requestAccounts' });
       } else {
+        console.log('MetaMask não encontrado, usando WalletConnect...');
         // Use WalletConnect for mobile wallets
         provider = await EthereumProvider.init({
           projectId: '2f05a7cec156478db512ab481b6159d4', // Free public project ID
@@ -61,15 +65,28 @@ export const useWallet = () => {
           }
         });
         
+        console.log('WalletConnect provider inicializado, conectando...');
         // Enable session (triggers the modal)
         await provider.enable();
       }
 
       const web3 = new Web3(provider);
       const accounts = await web3.eth.getAccounts();
+      console.log('Contas obtidas:', accounts);
+      
+      if (accounts.length === 0) {
+        throw new Error('Nenhuma conta encontrada');
+      }
+      
       const chainId = await web3.eth.getChainId();
       const balance = await web3.eth.getBalance(accounts[0]);
       const balanceInEth = web3.utils.fromWei(balance, 'ether');
+
+      console.log('Carteira conectada com sucesso:', {
+        address: accounts[0],
+        chainId: Number(chainId),
+        balance: balanceInEth
+      });
 
       setWallet({
         isConnected: true,
@@ -83,6 +100,7 @@ export const useWallet = () => {
       // Listen for account changes
       if (provider.on) {
         provider.on('accountsChanged', (accounts: string[]) => {
+          console.log('Contas alteradas:', accounts);
           if (accounts.length === 0) {
             disconnectWallet();
           } else {
@@ -92,17 +110,18 @@ export const useWallet = () => {
 
         // Listen for network changes
         provider.on('chainChanged', (chainId: string) => {
+          console.log('Rede alterada:', chainId);
           setWallet(prev => ({ ...prev, chainId: parseInt(chainId, 16) }));
         });
 
         // Listen for disconnect
         provider.on('disconnect', (code: number, reason: string) => {
-          console.log('Wallet disconnected:', code, reason);
+          console.log('Carteira desconectada:', code, reason);
           disconnectWallet();
         });
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao conectar carteira:', error);
       throw error;
     } finally {
@@ -111,6 +130,7 @@ export const useWallet = () => {
   };
 
   const disconnectWallet = () => {
+    console.log('Desconectando carteira...');
     if (wallet.provider?.disconnect) {
       wallet.provider.disconnect();
     }
@@ -127,12 +147,14 @@ export const useWallet = () => {
   const switchNetwork = async (chainId: number) => {
     if (!wallet.provider) return;
     
+    console.log(`Trocando para rede ${chainId}...`);
     try {
       await wallet.provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${chainId.toString(16)}` }],
       });
     } catch (error: any) {
+      console.error('Erro ao trocar rede:', error);
       // If network doesn't exist, add it
       if (error.code === 4902) {
         const networkConfigs: Record<number, any> = {
@@ -177,6 +199,7 @@ export const useWallet = () => {
         if (window.ethereum && window.ethereum.isMetaMask) {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
+            console.log('Auto-conectando com MetaMask...');
             const web3 = new Web3(window.ethereum);
             const chainId = await web3.eth.getChainId();
             const balance = await web3.eth.getBalance(accounts[0]);
